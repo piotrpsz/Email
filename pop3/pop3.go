@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"strings"
 
-	"Email/iface"
-	"Email/iface/plain"
-	"Email/iface/stls"
 	"Email/pop3/command"
 	"Email/pop3/response"
 	"Email/shared/tr"
+	"Email/socket"
+	"Email/socket/plain"
+	"Email/socket/stls"
 )
 
 type Security uint8
@@ -24,12 +24,12 @@ const (
 const (
 	CR    = byte(0x0d)
 	LF    = byte(0x0a)
-	HTAB  = byte(9)
+	HTAB  = byte(0x09)
 	SPACE = byte(0x20)
 )
 
 type POP3 struct {
-	ifc *iface.TCPInterface
+	socket socket.Socket
 }
 
 type ListItem struct {
@@ -52,35 +52,35 @@ func (h HeaderItem) String() string {
 
 func New(server string, port int, security Security) *POP3 {
 	if security == TLS {
-		if socket, ok := stls.ConnectTo(server, port); ok {
-			return &POP3{ifc: iface.New(socket)}
+		if tlsSocket := stls.ConnectTo(server, port); tlsSocket.Valid() {
+			return &POP3{socket: tlsSocket}
 		}
 		return nil
 	}
 	if security == Plain {
-		if socket, ok := plain.ConnectTo(server, port); ok {
-			return &POP3{ifc: iface.New(socket)}
+		if plainSocket := plain.ConnectTo(server, port); plainSocket.Valid() {
+			return &POP3{socket: plainSocket}
 		}
 	}
 	return nil
 }
 
 func (p *POP3) Close() {
-	if p.ifc != nil {
-		p.ifc.Close()
-		p.ifc = nil
+	if p.socket != nil {
+		p.socket.Close()
+		p.socket = nil
 	}
 }
 
 func (p *POP3) Quit() *response.Response {
-	return command.Send(p.ifc, "QUIT", nil)
+	return command.Send(p.socket, "QUIT", nil)
 }
 
 func (p *POP3) Auth(user, password string) (*response.Response, bool) {
 	var resp *response.Response
 
-	if resp = command.Send(p.ifc, "USER", []string{user}); resp != nil && resp.IsOK() {
-		if resp = command.Send(p.ifc, "PASS", []string{password}); resp != nil && resp.IsOK() {
+	if resp = command.Send(p.socket, "USER", []string{user}); resp != nil && resp.IsOK() {
+		if resp = command.Send(p.socket, "PASS", []string{password}); resp != nil && resp.IsOK() {
 			return resp, true
 		}
 	}
@@ -91,7 +91,7 @@ func (p *POP3) Auth(user, password string) (*response.Response, bool) {
 func (p *POP3) Stat() (*response.Response, bool) {
 	var resp *response.Response
 
-	if resp = command.Send(p.ifc, "STAT", nil); resp != nil && resp.IsOK() {
+	if resp = command.Send(p.socket, "STAT", nil); resp != nil && resp.IsOK() {
 		return resp, true
 	}
 	return resp, false
@@ -102,7 +102,7 @@ func (p *POP3) Stat() (*response.Response, bool) {
 func (p *POP3) List() []ListItem {
 	var resp *response.Response
 
-	if resp = command.Send(p.ifc, "LIST", nil); resp != nil {
+	if resp = command.Send(p.socket, "LIST", nil); resp != nil {
 		if resp.IsOK() {
 			return p.ListRead()
 		}
@@ -114,7 +114,7 @@ func (p *POP3) ListRead() []ListItem {
 	var result []ListItem
 
 	for {
-		if data, ok := p.ifc.Read(512); ok {
+		if data, ok := p.socket.Read(512); ok {
 			text := string(data)
 			if text == "." {
 				break
@@ -135,7 +135,7 @@ func (p *POP3) ListRead() []ListItem {
 }
 
 func (p *POP3) Read() *response.Response {
-	return response.Read(p.ifc)
+	return response.Read(p.socket)
 }
 
 func splitToItems(text, sep string) []string {
@@ -159,15 +159,15 @@ func splitToItems(text, sep string) []string {
 func (p *POP3) ReadEmail(item ListItem) bool {
 	fmt.Println(item)
 	number := fmt.Sprintf("%d", item.ID)
-	if resp := command.Send(p.ifc, "RETR", []string{number}); resp != nil && resp.IsOK() {
-		if data := p.ifc.ReadHeader(); data != nil {
+	if resp := command.Send(p.socket, "RETR", []string{number}); resp != nil && resp.IsOK() {
+		if data := p.socket.ReadHeader(); data != nil {
 			fmt.Println("Size:", len(data))
 			if hdr := p.parseHeader(data); hdr != nil {
 				for _, i := range hdr {
 					fmt.Printf("%s:%s\n", i.Key, i.Value)
 				}
 				fmt.Println()
-				if data := p.ifc.ReadBody(); data != nil {
+				if data := p.socket.ReadBody(); data != nil {
 					fmt.Println(string(data))
 					fmt.Println("Size:", len(data))
 				} else {

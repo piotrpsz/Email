@@ -1,8 +1,8 @@
 package command
 
 import (
-	"Email/iface"
 	"Email/pop3/response"
+	"Email/socket"
 )
 
 const (
@@ -10,7 +10,7 @@ const (
 	separator = " "
 )
 
-func Send(ifc *iface.TCPInterface, cmd string, args []string) *response.Response {
+func Send(sck socket.Socket, cmd string, args []string) *response.Response {
 	buffer := cmd
 	for _, item := range args {
 		buffer += separator
@@ -18,8 +18,8 @@ func Send(ifc *iface.TCPInterface, cmd string, args []string) *response.Response
 	}
 	buffer += crlf
 
-	if ifc.Write([]byte(buffer)) {
-		return response.Read(ifc)
+	if sck.Write([]byte(buffer)) {
+		return response.Read(sck)
 	}
 	return nil
 }

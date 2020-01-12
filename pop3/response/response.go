@@ -3,7 +3,7 @@ package response
 import (
 	"bytes"
 
-	"Email/iface"
+	"Email/socket"
 )
 
 const (
@@ -26,8 +26,8 @@ func init() {
 	errBytes = []byte(errPrefix)
 }
 
-func Read(ifc *iface.TCPInterface) *Response {
-	if data, ok := ifc.Read(maxResponseSize); ok {
+func Read(sck socket.Socket) *Response {
+	if data, ok := sck.Read(maxResponseSize); ok {
 		if bytes.HasPrefix(data, okBytes) {
 			return &Response{
 				Status: okPrefix,

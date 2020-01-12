@@ -18,7 +18,7 @@ func main() {
 		return
 	}
 
-	p3 := pop3.New(addr, -1, pop3.Plain)
+	p3 := pop3.New(addr, -1, pop3.TLS)
 	if p3 == nil {
 		return
 	}
