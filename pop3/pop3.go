@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"Email/email"
 	"Email/pop3/command"
 	"Email/pop3/response"
 	"Email/shared/tr"
@@ -39,15 +40,6 @@ type ListItem struct {
 
 func (i ListItem) String() string {
 	return fmt.Sprintf("ListItem (id: %d, size: %d)", i.ID, i.Size)
-}
-
-type HeaderItem struct {
-	Key   string
-	Value string
-}
-
-func (h HeaderItem) String() string {
-	return fmt.Sprintf("(%s : %s)", h.Key, h.Value)
 }
 
 func New(server string, port int, security Security) *POP3 {
@@ -156,49 +148,31 @@ func splitToItems(text, sep string) []string {
 *                                                                   *
 ********************************************************************/
 
-func (p *POP3) ReadEmail(item ListItem) bool {
-	fmt.Println(item)
+func (p *POP3) ReadEmail(item ListItem) *email.Parcel {
 	number := fmt.Sprintf("%d", item.ID)
 	if resp := command.Send(p.socket, "RETR", []string{number}); resp != nil && resp.IsOK() {
 		if data := p.socket.ReadHeader(); data != nil {
-			fmt.Println("Size:", len(data))
-			if hdr := p.parseHeader(data); hdr != nil {
-				for _, i := range hdr {
-					fmt.Printf("%s:%s\n", i.Key, i.Value)
-				}
-				fmt.Println()
+			if header := p.parseHeader(data); header != nil {
 				if data := p.socket.ReadBody(); data != nil {
-					fmt.Println(string(data))
-					fmt.Println("Size:", len(data))
-				} else {
-					fmt.Println()
-					fmt.Println("DUPA")
+					return email.New(header, data)
 				}
 			}
-
-			return true
 		}
 	}
-	fmt.Println("ERROR")
-	return false
+	return nil
 }
 
-func (p *POP3) parseHeader(data []byte) []HeaderItem {
-	var header []HeaderItem
+func (p *POP3) parseHeader(data []byte) map[string]string {
+	header := map[string]string{}
 	var acc []byte
 
 	buffer := bytes.Split(data, []byte{CR, LF})
 	acc = append(acc, buffer[0]...)
-	//printAsText(buffer[0])
 	i := 1
 
 	for i < len(buffer) {
-		//printAsText(buffer[i])
 		if len(buffer[i]) > 0 {
 			if buffer[i][0] == HTAB || buffer[i][0] == SPACE {
-				if buffer[i][0] == HTAB {
-					//acc = append(acc, []byte{' '}...)
-				}
 				acc = append(acc, bytes.TrimSpace(buffer[i])...)
 				i++
 				continue
@@ -206,7 +180,7 @@ func (p *POP3) parseHeader(data []byte) []HeaderItem {
 
 			if len(acc) > 0 {
 				if key, value, ok := keyAndValue(acc); ok {
-					header = append(header, HeaderItem{Key: key, Value: value})
+					header[key] = value
 				}
 			}
 			acc = []byte{}
@@ -217,7 +191,7 @@ func (p *POP3) parseHeader(data []byte) []HeaderItem {
 
 	if len(acc) > 0 {
 		if key, value, ok := keyAndValue(acc); ok {
-			header = append(header, HeaderItem{Key: key, Value: value})
+			header[key] = value
 		}
 	}
 

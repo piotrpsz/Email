@@ -35,7 +35,13 @@ func main() {
 
 					if items := p3.List(); len(items) > 0 {
 						for _, item := range items {
-							p3.ReadEmail(item)
+							if parcel := p3.ReadEmail(item); parcel != nil {
+								//parcel.DisplayHeader()
+								fmt.Println("         From:", parcel.From())
+								fmt.Println("      Subject:", parcel.Subject())
+								fmt.Println("         Date:", parcel.Date())
+								fmt.Println("Delivery-date:", parcel.DeliveryDate())
+							}
 							fmt.Println("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 						}
 					}
