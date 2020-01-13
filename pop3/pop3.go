@@ -3,6 +3,7 @@ package pop3
 import (
 	"bytes"
 	"fmt"
+	"mime"
 	"strconv"
 	"strings"
 
@@ -200,9 +201,17 @@ func (p *POP3) parseHeader(data []byte) map[string]string {
 
 func keyAndValue(data []byte) (string, string, bool) {
 	if idx := indexOf(data, ':'); idx != -1 {
+		decoder := new(mime.WordDecoder)
 		keyBytes := bytes.TrimSpace(data[:idx])
 		valueBytes := bytes.TrimSpace(data[idx+1:])
-		return string(keyBytes), string(valueBytes), true
+
+		key := string(keyBytes)
+		value := string(valueBytes)
+		if v, err := decoder.DecodeHeader(value); tr.IsOK(err) {
+			value = v
+		}
+
+		return key, value, true
 
 	}
 	return "", "", false
